@@ -1,0 +1,9 @@
+{
+  "data_path": "data/processed_data/lichess-2025-07.jsonl",
+  "valgames_nb": 10,
+  "ref_name": "lichess-2025-07",
+  "expe": "Expe1",
+  "model_name": "OLP",
+  "L_games_nb": [100],
+  "L_rules": ["norules", "withrules"]
+}

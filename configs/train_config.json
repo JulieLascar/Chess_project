@@ -1,0 +1,13 @@
+{
+  "train_data_path": "data/processed_data/lichess-2025-07.jsonl",
+  "val_data_path": "data/processed_data/lichess-2025-07.jsonl",
+  "L_games_nb": [100],
+  "valgames_nb": 10,
+  "model_name": "TLP",
+  "lr": 0.001,
+  "epochs": 2,
+  "expe": "Expe2",
+  "tensorboard": true,
+  "save_model": true,
+  "L_rules": ["norules", "withrules"]
+}

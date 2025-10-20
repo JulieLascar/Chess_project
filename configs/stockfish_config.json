@@ -1,0 +1,6 @@
+{
+  "ref_name": "lichess-2025-07",
+  "expe": "Expe3",
+  "batch_size": 100,
+  "workers": 14
+}
