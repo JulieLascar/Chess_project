@@ -240,7 +240,6 @@ tensorboard --logdir experiments/<expe_name>/runs/
 ## 📝 Notes
 
 - Stockfish depth is set to 15 by default (configurable in `computeSF.py`)
-- Training uses Adam optimizer with default learning rate 0.001
 - Models are saved when validation accuracy improves
 - Stockfish evaluations are cached during analysis to avoid redundant computations for identical positions.
 
