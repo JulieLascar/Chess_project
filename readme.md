@@ -2,19 +2,6 @@
 
 A machine learning project for predicting chess moves using neural networks, with comprehensive Stockfish evaluation for performance analysis.
 
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Project Structure](#project-structure)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Model Architecture](#model-architecture)
-- [Evaluation Metrics](#evaluation-metrics)
-- [Results](#results)
-- [Contributing](#contributing)
-
 ## 🎯 Overview
 
 This project trains neural networks to predict chess moves from FEN (Forsyth-Edwards Notation) positions. It explores various training configurations, including:
@@ -33,8 +20,21 @@ The project uses games from the Lichess database and implements a complete pipel
 - **Stockfish Integration**: Comprehensive position evaluation using Stockfish engine
 - **Parallel Processing**: Multi-core support for faster Stockfish analysis
 - **TensorBoard Support**: Real-time training visualization
-- **Automatic Resume**: Continue interrupted processing from last checkpoint
 - **Move Quality Analysis**: Evaluate prediction quality with centipawn loss metrics
+
+## 🔄 Workflow Summary
+
+```
+1. Download Data (main_data.py)
+   ↓
+2. Train Models (train.py)
+   ↓
+3. Generate Predictions (inference.py)
+   ↓
+4. Evaluate with Stockfish (computeSF.py)
+   ↓
+5. Analyze Results
+```
 
 ## 📁 Project Structure
 
@@ -187,33 +187,13 @@ This analyzes:
 A simple baseline model consisting of:
 - **Input**: 855-dimensional feature vector
   - 832 features: Board position (64 squares × 13 channels)
+    - 12 channels for pieces (P, R, N, B, Q, K for white/black)
+    - 1 channel for empty squares
   - 1 feature: Turn (white/black)
   - 4 features: Castling rights
   - 16 features: En passant square
   - 2 features: Move counters
 - **Output**: ~20,480 classes (all possible moves)
-
-Despite its simplicity, OLP provides a strong baseline for move prediction tasks.
-
-### Feature Encoding
-
-**Board representation (64 × 13):**
-- 12 channels for pieces (P, R, N, B, Q, K for white/black)
-- 1 channel for empty squares
-
-**Additional features:**
-- Turn indicator
-- Castling availability (KQkq)
-- En passant target square
-- Halfmove clock (fifty-move rule)
-- Fullmove number
-
-## 📊 Evaluation Metrics
-
-### 
-
-- **SF_score**: 
-- **delta**: 
 
 
 ### Output Format
@@ -225,7 +205,7 @@ Results are saved in JSONL format with the following structure:
   "data_ref": "lichess-2025-07",
   "id": "0_15",
   "FEN": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-  "legal_moves": ["e2e4", "d2d4", ...],
+  "legal_moves": ["e2e4", "d2d4", "..."],
   "human": {
     "next_move": "e2e4",
     "SF_score": 25,
@@ -250,61 +230,26 @@ Results are saved in JSONL format with the following structure:
 }
 ```
 
-## 📈 Results
-
-Training results are saved in:
-- `experiments/<expe_name>/models/` - Trained model checkpoints
-- `experiments/<expe_name>/runs/` - TensorBoard logs
-- `experiments/<expe_name>/<ref_name>_inference.jsonl` - Model predictions
-- `experiments/<expe_name>/<ref_name>_SF.jsonl` - Stockfish evaluations
-
 ### Viewing Training Progress
 
 ```bash
 tensorboard --logdir experiments/<expe_name>/runs/
 ```
 
-## 🔄 Workflow Summary
-
-```
-1. Download Data (main_data.py)
-   ↓
-2. Train Models (train.py)
-   ↓
-3. Generate Predictions (inference.py)
-   ↓
-4. Evaluate with Stockfish (computeSF.py)
-   ↓
-5. Analyze Results
-```
-
-## 🛠️ Advanced Features
-
-### Parallel Processing
-
-Stockfish analysis supports multiprocessing for faster evaluation:
-```python
-workers = 14 
-```
-
-### Caching
-
-Stockfish evaluations are cached during analysis to avoid redundant computations for identical positions.
 
 ## 📝 Notes
 
 - Stockfish depth is set to 15 by default (configurable in `computeSF.py`)
 - Training uses Adam optimizer with default learning rate 0.001
 - Models are saved when validation accuracy improves
-- All configurations use JSON files for easy experimentation
+- Stockfish evaluations are cached during analysis to avoid redundant computations for identical positions.
+
 
 ## 🤝 Contributing
 
 Contributions are welcome! Areas for improvement:
 
 - Additional model architectures (CNN, Transformer)
-- Opening book integration
-- Endgame tablebases
 - Advanced feature engineering
 - Hyperparameter optimization
 - Web interface for live prediction
