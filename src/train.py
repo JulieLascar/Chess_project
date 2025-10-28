@@ -26,14 +26,7 @@ cfg = Config.from_json("configs/train_config.json")
 
 # Batch size mapping based on dataset size
 # Smaller datasets use smaller batches for more gradient updates
-BATCH_SIZE_MAP = {
-    1: 16,
-    10: 64,
-    100: 128,
-    1000: 512,
-    10000: 1024,
-    100000: 1024
-}
+BATCH_SIZE_MAP = {1: 16, 10: 64, 100: 128, 1000: 512, 10000: 1024, 100000: 1024}
 
 VAL_BATCH_SIZE = BATCH_SIZE_MAP[cfg.valgames_nb]
 
@@ -44,13 +37,14 @@ print(f"Using device: {device}")
 # Initialize TensorBoard writer if enabled
 if cfg.tensorboard:
     from torch.utils.tensorboard import SummaryWriter
+
     writer = SummaryWriter(log_dir=f"experiments/{cfg.expe}/runs/")
 
 
-def train_one_epoch(model, dataloader, optimizer, loss_function, device, rules):
+def train_one_epoch(model, dataloader, optimizer, loss_function, device, rules, learning_rate=None):
     """
     Train the model for one epoch.
-    
+
     Args:
         model: Neural network model to train
         dataloader: Training data loader
@@ -58,10 +52,10 @@ def train_one_epoch(model, dataloader, optimizer, loss_function, device, rules):
         loss_function: Loss criterion (e.g., CrossEntropyLoss)
         device: Device to run training on (CPU or CUDA)
         rules: Rule enforcement mode ("withrules", "norules", "medium")
-        
+
     Returns:
         Tuple of (average_loss, accuracy)
-        
+
     Note:
         - "withrules" mode applies legal moves mask during training
         - This forces the model to only consider legal moves
@@ -75,19 +69,30 @@ def train_one_epoch(model, dataloader, optimizer, loss_function, device, rules):
         y = y.to(device).long()
         lm = lm.to(device)
 
+        if optimizer is not None:
+            optimizer.zero_grad()
+        else:
+            model.zero_grad()
+
         # Forward pass
         output = model(X)  # [batch_size, num_classes]
-        
+
         # Apply legal moves mask if using rules during training
         if rules == "withrules":
             output = output + torch.log(lm.detach())
-        
+
         loss = loss_function(output, y)
 
-        # Backward pass and optimization
-        optimizer.zero_grad()
         loss.backward()
-        optimizer.step()
+
+        if optimizer is not None:
+            optimizer.step()
+        else:
+            # Manual gradient descent: w = w - lr * grad
+            with torch.no_grad():
+                for param in model.parameters():
+                    if param.grad is not None:
+                        param -= learning_rate * param.grad
 
         # Calculate metrics
         with torch.no_grad():
@@ -104,17 +109,17 @@ def train_one_epoch(model, dataloader, optimizer, loss_function, device, rules):
 def evaluate(model, dataloader, loss_function, device, rules):
     """
     Evaluate the model on validation set.
-    
+
     Args:
         model: Neural network model to evaluate
         dataloader: Validation data loader
         loss_function: Loss criterion
         device: Device to run evaluation on
         rules: Rule enforcement mode ("withrules", "norules", "medium")
-        
+
     Returns:
         Tuple of (average_loss, accuracy)
-        
+
     Note:
         - "medium" and "withrules" modes apply legal moves mask during evaluation
         - This ensures predictions are always legal moves
@@ -131,11 +136,11 @@ def evaluate(model, dataloader, loss_function, device, rules):
 
             # Forward pass
             output = model(X)  # [batch_size, num_classes]
-            
+
             # Apply legal moves mask for withrules and medium modes
             if rules in ["withrules", "medium"]:
                 output = output + torch.log(lm.detach())
-            
+
             loss = loss_function(output, y)
 
             # Calculate metrics
@@ -164,7 +169,7 @@ for games_nb in cfg.L_games_nb:
     # Create datasets and dataloaders
     train_dataset = ChessFENDataset(cfg.train_data_path, move_to_idx, games_nb)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    
+
     val_dataset = ChessFENDataset(cfg.val_data_path, move_to_idx, cfg.valgames_nb)
     val_loader = DataLoader(val_dataset, batch_size=VAL_BATCH_SIZE, shuffle=False)
 
@@ -172,7 +177,7 @@ for games_nb in cfg.L_games_nb:
     x, y, lm, _, _ = train_dataset[0]
     input_dim = x.shape[0]
     num_classes = lm.shape[0]
-    
+
     print(f"Training dataset size: {len(train_dataset)} positions")
     print(f"Validation dataset size: {len(val_dataset)} positions")
     print(f"Input dimension: {input_dim}")
@@ -184,59 +189,53 @@ for games_nb in cfg.L_games_nb:
         print(f"\n{'-' * 70}")
         print(f"Training mode: {rules}")
         print(f"{'-' * 70}")
-        
+
         # Initialize model
         torch.manual_seed(42)  # For reproducibility
-        model = MODELS_DICT[cfg.model_name](
-            input_dim=input_dim,
-            num_classes=num_classes
-        )
+        model = MODELS_DICT[cfg.model_name](input_dim=input_dim, num_classes=num_classes)
         model.to(device)
 
         # Setup training
         loss_function = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=cfg.lr)
+        if cfg.use_optimizer:
+            optimizer = optim.Adam(model.parameters(), lr=cfg.lr)
+            print(f"Using Adam optimizer with learning rate: {cfg.lr}")
+        else:
+            optimizer = None
+            print(f"Using manual gradient descent with learning rate: {cfg.lr}")
 
         # Model saving setup
         best_val_acc = 0.0
         model_path = os.path.join("experiments", cfg.expe, "models")
         os.makedirs(model_path, exist_ok=True)
-        best_model_path = os.path.join(
-            model_path,
-            f"best_model_{games_nb}_{rules}.pth"
-        )
+        best_model_path = os.path.join(model_path, f"best_model_{games_nb}_{rules}.pth")
 
         # Initial validation (before training)
         val_loss, val_acc = evaluate(model, val_loader, loss_function, device, rules)
         print(f"Initial validation - Loss: {val_loss:.4f}, Acc: {val_acc:.4f}")
-        
+
         if cfg.tensorboard:
             writer.add_scalars("Val-Loss", {f"{games_nb}_{rules}": val_loss}, 0)
             writer.add_scalars("Val-Accuracy", {f"{games_nb}_{rules}": val_acc}, 0)
-            
+
             # Also log medium mode for norules
             if rules == "norules":
-                writer.add_scalars("Val-Loss", {f"{games_nb}_medium": val_loss}, 0)
-                writer.add_scalars("Val-Accuracy", {f"{games_nb}_medium": val_acc}, 0)
+                val_loss_med, val_acc_med = evaluate(model, val_loader, loss_function, device, "medium")
+                writer.add_scalars("Val-Loss", {f"{games_nb}_medium": val_loss_med}, 0)
+                writer.add_scalars("Val-Accuracy", {f"{games_nb}_medium": val_acc_med}, 0)
 
         # Training loop
         print(f"\nStarting training for {cfg.epochs} epochs...")
         for epoch in range(cfg.epochs):
             # Train for one epoch
-            train_loss, train_acc = train_one_epoch(
-                model, train_loader, optimizer, loss_function, device, rules
-            )
-            
+            train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, loss_function, device, rules, cfg.lr)
+
             # Evaluate on validation set
-            val_loss, val_acc = evaluate(
-                model, val_loader, loss_function, device, rules
-            )
+            val_loss, val_acc = evaluate(model, val_loader, loss_function, device, rules)
 
             # Evaluate medium mode for norules (model without rules, eval with rules)
             if rules == "norules":
-                val_loss_med, val_acc_med = evaluate(
-                    model, val_loader, loss_function, device, "medium"
-                )
+                val_loss_med, val_acc_med = evaluate(model, val_loader, loss_function, device, "medium")
                 print(
                     f"Epoch {epoch + 1}/{cfg.epochs} | "
                     f"Train Loss: {train_loss:.4f}, Acc: {train_acc:.4f} | "
@@ -252,11 +251,11 @@ for games_nb in cfg.L_games_nb:
 
             # Log to TensorBoard
             if cfg.tensorboard:
-                #writer.add_scalars("Train-Loss", {f"{games_nb}_{rules}": train_loss}, epoch + 1)
-                #writer.add_scalars("Train-Accuracy", {f"{games_nb}_{rules}": train_acc}, epoch + 1)
+                # writer.add_scalars("Train-Loss", {f"{games_nb}_{rules}": train_loss}, epoch + 1)
+                # writer.add_scalars("Train-Accuracy", {f"{games_nb}_{rules}": train_acc}, epoch + 1)
                 writer.add_scalars("Val-Loss", {f"{games_nb}_{rules}": val_loss}, epoch + 1)
                 writer.add_scalars("Val-Accuracy", {f"{games_nb}_{rules}": val_acc}, epoch + 1)
-                
+
                 if rules == "norules":
                     writer.add_scalars("Val-Loss", {f"{games_nb}_medium": val_loss_med}, epoch + 1)
                     writer.add_scalars("Val-Accuracy", {f"{games_nb}_medium": val_acc_med}, epoch + 1)
@@ -268,7 +267,7 @@ for games_nb in cfg.L_games_nb:
                     {
                         "epoch": epoch,
                         "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict() if optimizer is not None else None,
                         "val_acc": val_acc,
                         "val_loss": val_loss,
                         "train_acc": train_acc,
