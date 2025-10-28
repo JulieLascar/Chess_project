@@ -1,7 +1,9 @@
 # Perso
-experiments/Expe3/lichess-2025-07_SF.jsonl
-experiments/Expe3/lichess-2025-07_inference.jsonl
+experiments/*
 data/processed_data/pgnFiltered_lichess-2025-08.json
+data/processed_data/lichess-2025-08.jsonl
+notebooks/brouillon.ipynb
+notebooks/explore_old.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
